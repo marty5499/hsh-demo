@@ -3,674 +3,468 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IoT Device 測試</title>
+    <title>IoT 設備儀表板</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script type="module" src="./iotDevice.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            height: calc(100vh - 40px);
+            font-family: Arial, sans-serif;
             display: flex;
-            flex-direction: column;
-        }
-
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 25px 30px;
-            text-align: center;
-            flex-shrink: 0;
-        }
-
-        .header h1 {
-            font-size: 2.2em;
-            margin-bottom: 8px;
-        }
-
-        .status {
-            display: inline-block;
-            padding: 6px 12px;
-            border-radius: 15px;
-            font-size: 13px;
-            font-weight: bold;
-            margin-top: 8px;
-        }
-
-        .status.connected {
-            background: #4CAF50;
-            color: white;
-        }
-
-        .status.disconnected {
-            background: #f44336;
-            color: white;
-        }
-
-        .status.connecting {
-            background: #ff9800;
-            color: white;
-        }
-
-        .main-layout {
-            display: flex;
-            flex: 1;
-            min-height: 0;
-        }
-
-        .left-panel {
-            width: 50%;
-            padding: 25px;
-            overflow-y: auto;
-            border-right: 1px solid #e9ecef;
-        }
-
-        .right-panel {
-            width: 50%;
-            padding: 25px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .controls-container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        .section {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #e9ecef;
-        }
-
-        .section h2 {
-            color: #333;
-            margin-bottom: 15px;
-            font-size: 1.2em;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 6px;
-            font-weight: 600;
-            color: #555;
-            font-size: 14px;
-        }
-
-        input, textarea, select {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
-            width: 100%;
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .logs-section {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .logs-header {
-            display: flex;
-            justify-content: space-between;
+            justify-content: center;
             align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .logs-header h2 {
-            color: #333;
-            font-size: 1.2em;
+            height: 100vh;
             margin: 0;
+            background-color: #f5f5f5;
         }
 
-        .logs-controls {
+        .dashboard {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .gauge-container {
+            width: 300px;
+            height: 300px;
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .gauge {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            border-radius: 50%;
+            background-color: #f0f0f0;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .gauge-body {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: white;
+            position: relative;
+        }
+
+        .gauge-fill {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-origin: bottom center;
+            transform: rotate(0deg);
+            background: conic-gradient(
+                #ff6b6b 0deg,
+                #ff9e7a 90deg,
+                #ffd166 180deg,
+                #06d6a0 270deg,
+                #118ab2 360deg
+            );
+            border-radius: 50%;
+            transition: transform 0.5s ease-out;
+        }
+
+        .gauge-cover {
+            width: 80%;
+            height: 80%;
+            background-color: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 10%;
+            left: 10%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .gauge-center {
+            width: 15px;
+            height: 15px;
+            background-color: #333;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+
+        .gauge-needle {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transition: transform 0.5s ease-out;
+        }
+
+        .needle {
+            width: 4px;
+            height: 45%;
+            background-color: red;
+            position: absolute;
+            top: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            transform-origin: bottom center;
+            border-radius: 4px 4px 0 0;
+        }
+
+        .gauge-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .gauge-label {
+            font-size: 20px;
+            color: #666;
+        }
+
+        .gauge-scale {
+            position: absolute;
+            width: 90%;
+            height: 90%;
+            top: 5%;
+            left: 5%;
+        }
+
+        .scale-mark {
+            position: absolute;
+            width: 2px;
+            height: 10px;
+            background-color: #333;
+            transform-origin: bottom center;
+        }
+
+        .scale-text {
+            position: absolute;
+            font-size: 12px;
+            transform-origin: bottom center;
+        }
+
+        .controls {
+            margin-top: 20px;
             display: flex;
             gap: 10px;
         }
 
-        .scroll-bottom-btn {
-            background: #666;
-            color: white;
+        button {
+            padding: 10px 15px;
             border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
+            border-radius: 4px;
+            background-color: #4a90e2;
+            color: white;
             cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #357abD;
+        }
+
+        .device-info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e0e0e0;
+            border-radius: 4px;
             font-size: 14px;
-            font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
-            width: auto;
         }
 
-        .scroll-bottom-btn:hover {
-            background: #777;
-            transform: translateY(-2px);
+        .slider-container {
+            margin-top: 20px;
+            width: 300px;
         }
 
-        .clear-logs {
-            width: auto;
-            background: #666;
-            padding: 8px 16px;
-            font-size: 12px;
+        .slider-control {
+            width: 100%;
         }
 
-        .log-container {
-            background: #1e1e1e;
-            color: #f8f8f2;
-            padding: 15px;
-            border-radius: 8px;
-            flex: 1;
-            overflow-y: auto;
-            overflow-x: hidden;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 13px;
-            line-height: 1.4;
-            min-height: 200px;
-            max-height: calc(100vh - 300px);
-            word-wrap: break-word;
-            white-space: pre-wrap;
+        .value-display {
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
         }
 
-        .log-entry {
-            margin-bottom: 6px;
-            padding: 6px 8px;
+        .value-box {
+            padding: 10px;
+            background-color: #e0e0e0;
             border-radius: 4px;
-            border-left: 3px solid transparent;
+            text-align: center;
+            width: 45%;
         }
 
-        .log-entry.info {
-            border-left-color: #00bcd4;
-            background: rgba(0, 188, 212, 0.1);
+        .device-id-input {
+            margin-top: 20px;
+            width: 300px;
         }
 
-        .log-entry.success {
-            border-left-color: #4caf50;
-            background: rgba(76, 175, 80, 0.1);
-        }
-
-        .log-entry.error {
-            border-left-color: #f44336;
-            background: rgba(244, 67, 54, 0.1);
-        }
-
-        .log-entry.received {
-            border-left-color: #ff9800;
-            background: rgba(255, 152, 0, 0.1);
-        }
-
-        .timestamp {
-            color: #888;
-            font-size: 11px;
-        }
-
-        /* 手機版響應式設計 */
-        @media (max-width: 768px) {
-            .container {
-                height: calc(100vh - 20px);
-            }
-            
-            .main-layout {
-                flex-direction: column;
-            }
-            
-            .left-panel, .right-panel {
-                width: 100%;
-                border-right: none;
-            }
-            
-            .left-panel {
-                border-bottom: 1px solid #e9ecef;
-                max-height: 60%;
-            }
-            
-            .right-panel {
-                min-height: 40%;
-            }
-            
-            .header {
-                padding: 20px;
-            }
-            
-            .header h1 {
-                font-size: 1.8em;
-            }
-        }
-
-        /* 捲軸樣式 */
-        .log-container::-webkit-scrollbar, .left-panel::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .log-container::-webkit-scrollbar-track, .left-panel::-webkit-scrollbar-track {
-            background: #2a2a2a;
+        .device-id-input input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
             border-radius: 4px;
-            margin: 2px;
-        }
-
-        .log-container::-webkit-scrollbar-thumb {
-            background: #666;
-            border-radius: 4px;
-            border: 1px solid #333;
-        }
-
-        .left-panel::-webkit-scrollbar-thumb {
-            background: #ccc;
-            border-radius: 4px;
-        }
-
-        .log-container::-webkit-scrollbar-thumb:hover {
-            background: #888;
-        }
-
-        .log-container::-webkit-scrollbar-corner {
-            background: #2a2a2a;
-        }
-
-        /* Firefox 捲軸樣式 */
-        .log-container {
-            scrollbar-width: thin;
-            scrollbar-color: #666 #2a2a2a;
+            font-size: 16px;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>IoT Device 測試工具</h1>
-            <div id="status" class="status disconnected">未連線</div>
-        </div>
-
-        <div class="main-layout">
-            <!-- 左側控制面板 -->
-            <div class="left-panel">
-                <div class="controls-container">
-                    <!-- 連線控制 -->
-                    <div class="section">
-                        <h2>🔗 連線控制</h2>
-                        <div class="form-group">
-                            <label for="deviceId">裝置 ID:</label>
-                            <input type="text" id="deviceId" value="iot" placeholder="輸入裝置 ID">
-                        </div>
-                        <button id="connectBtn" onclick="toggleConnection()">連線</button>
+    <div class="dashboard">
+        <h1>IoT 溫度計儀表板</h1>
+        <div class="gauge-container">
+            <div class="gauge">
+                <div class="gauge-body">
+                    <div class="gauge-fill"></div>
+                    <div class="gauge-cover">
+                        <div class="gauge-value">0°C</div>
+                        <div class="gauge-label">溫度</div>
                     </div>
-
-                    <!-- 訊息發送 -->
-                    <div class="section">
-                        <h2>📤 發送訊息</h2>
-                        <div class="form-group">
-                            <label for="targetDevice">目標裝置:</label>
-                            <input type="text" id="targetDevice" value="iot" placeholder="目標裝置 ID">
-                        </div>
-                        <div class="form-group">
-                            <label for="action">動作:</label>
-                            <input type="text" id="action" value="test" placeholder="動作名稱">
-                        </div>
-                        <div class="form-group">
-                            <label for="payload">訊息內容 (JSON):</label>
-                            <textarea id="payload" rows="3" placeholder='{"message": "Hello IoT!"}'></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="sendType">發送類型:</label>
-                            <select id="sendType">
-                                <option value="async">非同步發送 (pub)</option>
-                                <option value="sync">同步發送 (pubSync)</option>
-                            </select>
-                        </div>
-                        <button id="sendBtn" onclick="sendMessage()" disabled>發送訊息</button>
+                    <div class="gauge-center"></div>
+                    <div class="gauge-needle">
+                        <div class="needle"></div>
                     </div>
-
-                    <!-- 訊息處理器 -->
-                    <div class="section">
-                        <h2>⚙️ 訊息處理器</h2>
-                        <div class="form-group">
-                            <label for="handlerAction">處理動作:</label>
-                            <input type="text" id="handlerAction" value="test" placeholder="要處理的動作名稱">
-                        </div>
-                        <button id="registerBtn" onclick="registerHandler()" disabled>註冊處理器</button>
-                        <div style="margin-top: 12px;">
-                            <small style="color: #666;">註冊後，當收到對應動作的訊息時會自動回覆</small>
-                        </div>
-                    </div>
-
-                    <!-- 快速測試 -->
-                    <div class="section">
-                        <h2>⚡ 快速測試</h2>
-                        <button onclick="quickTest()" id="quickTestBtn" disabled style="margin-bottom: 10px;">自我測試</button>
-                        <div style="margin-top: 12px;">
-                            <small style="color: #666;">將向自己發送測試訊息並顯示回覆</small>
-                        </div>
-                    </div>
+                    <div class="gauge-scale" id="gauge-scale"></div>
                 </div>
             </div>
+        </div>
 
-            <!-- 右側日誌面板 -->
-            <div class="right-panel">
-                <div class="logs-section">
-                    <div class="logs-header">
-                        <h2>📋 執行日誌</h2>
-                        <div class="logs-controls">
-                            <button onclick="scrollToBottom()" class="scroll-bottom-btn" title="捲動到底部">⬇</button>
-                            <button onclick="clearLogs()" class="clear-logs">清除日誌</button>
-                        </div>
-                    </div>
-                    <div class="log-container" id="logContainer"></div>
+        <div class="controls">
+            <button id="connectBtn">連接設備</button>
+            <button id="testBtn" disabled>測試讀取溫度</button>
+        </div>
+
+        <div class="device-id-input">
+            <label for="deviceIdInput">設備 ID:</label>
+            <input type="text" id="deviceIdInput" placeholder="輸入設備ID" value="">
+        </div>
+
+        <div class="device-info" id="deviceInfo">
+            設備狀態: 未連接
+        </div>
+
+        <div class="slider-container">
+            <h3>滑桿控制器</h3>
+            <input type="range" min="0" max="100" value="50" class="slider-control" id="mySlider">
+            <div class="value-display">
+                <div class="value-box">
+                    <div>當前值</div>
+                    <div id="sliderValue">50</div>
+                </div>
+                <div class="value-box">
+                    <div>接收值</div>
+                    <div id="receivedValue">--</div>
                 </div>
             </div>
         </div>
     </div>
 
     <script type="module">
-        let iot = null;
-        let isConnected = false;
-        let registeredHandlers = new Set(); // 追蹤已註冊的處理器
-
-        // 日誌功能 - 改善自動捲動
-        function addLog(message, type = 'info') {
-            const logContainer = document.getElementById('logContainer');
-            const timestamp = new Date().toLocaleTimeString('zh-TW');
-            const logEntry = document.createElement('div');
-            logEntry.className = `log-entry ${type}`;
-            logEntry.innerHTML = `
-                <span class="timestamp">[${timestamp}]</span> ${message}
-            `;
-            logContainer.appendChild(logEntry);
-            
-            // 強制捲動到最下方
-            setTimeout(() => {
-                logContainer.scrollTop = logContainer.scrollHeight;
-            }, 10);
-        }
-
-        // 清除日誌功能 - 修復為 window 全域函式
-        window.clearLogs = function() {
-            document.getElementById('logContainer').innerHTML = '';
-            addLog('日誌已清除', 'info');
-        };
-
-        // 捲動到底部功能
-        window.scrollToBottom = function() {
-            const logContainer = document.getElementById('logContainer');
-            logContainer.scrollTo({
-                top: logContainer.scrollHeight,
-                behavior: 'smooth'
-            });
-        };
-
-        // 更新狀態顯示
-        function updateStatus(status, className) {
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = status;
-            statusEl.className = `status ${className}`;
-        }
-
-        // 更新按鈕狀態
-        function updateButtons() {
-            const buttons = ['sendBtn', 'registerBtn', 'quickTestBtn'];
-            buttons.forEach(btnId => {
-                document.getElementById(btnId).disabled = !isConnected;
-            });
-            
-            const connectBtn = document.getElementById('connectBtn');
-            connectBtn.textContent = isConnected ? '斷線' : '連線';
-            connectBtn.disabled = false;
-        }
-
-        // 連線/斷線切換
-        window.toggleConnection = async function() {
-            const connectBtn = document.getElementById('connectBtn');
-            
-            if (isConnected) {
-                // 斷線
-                connectBtn.disabled = true;
-                updateStatus('斷線中...', 'connecting');
-                addLog('正在斷線...', 'info');
+        class TemperatureGauge {
+            constructor(options = {}) {
+                this.minValue = options.minValue || -20;
+                this.maxValue = options.maxValue || 100;
+                this.element = options.element || document.querySelector('.gauge-container');
+                this.needleElement = this.element.querySelector('.gauge-needle');
+                this.valueElement = this.element.querySelector('.gauge-value');
+                this.labelElement = this.element.querySelector('.gauge-label');
+                this.scaleElement = this.element.querySelector('#gauge-scale');
+                this.unit = options.unit || '°C';
+                this.label = options.label || '溫度';
                 
-                try {
+                this.createScale();
+                this.setValue(0);
+                this.setLabel(this.label);
+            }
+
+            createScale() {
+                // 創建刻度標記
+                const totalMarks = 10;
+                const increment = (this.maxValue - this.minValue) / totalMarks;
+
+                for (let i = 0; i <= totalMarks; i++) {
+                    const value = this.minValue + (i * increment);
+                    const angle = this.valueToAngle(value);
+                    const radians = (angle - 90) * (Math.PI / 180);
+                    
+                    // 刻度線
+                    const mark = document.createElement('div');
+                    mark.className = 'scale-mark';
+                    mark.style.height = i % 5 === 0 ? '15px' : '10px'; // 主要刻度較長
+                    mark.style.transform = `rotate(${angle}deg) translateY(-140px)`;
+                    this.scaleElement.appendChild(mark);
+                    
+                    // 只在主要刻度添加文字
+                    if (i % 5 === 0 || i === totalMarks) {
+                        const text = document.createElement('div');
+                        text.className = 'scale-text';
+                        text.textContent = Math.round(value);
+                        
+                        // 計算文字位置
+                        const textRadius = 120; // 略小於刻度的半徑
+                        const x = Math.cos(radians) * textRadius;
+                        const y = Math.sin(radians) * textRadius;
+                        
+                        text.style.left = `calc(50% + ${x}px)`;
+                        text.style.top = `calc(50% + ${y}px)`;
+                        text.style.transform = 'translate(-50%, -50%)';
+                        
+                        this.scaleElement.appendChild(text);
+                    }
+                }
+            }
+
+            valueToAngle(value) {
+                // 將值轉換為0-180度的角度 (半圓)
+                const range = this.maxValue - this.minValue;
+                const valuePercent = (value - this.minValue) / range;
+                return valuePercent * 180;
+            }
+
+            setValue(value) {
+                // 確保值在範圍內
+                const boundedValue = Math.max(this.minValue, Math.min(this.maxValue, value));
+                
+                // 設置顯示值
+                this.valueElement.textContent = `${boundedValue.toFixed(1)}${this.unit}`;
+                
+                // 旋轉指針
+                const angle = this.valueToAngle(boundedValue);
+                this.needleElement.style.transform = `rotate(${angle}deg)`;
+                
+                return this;
+            }
+
+            setLabel(label) {
+                this.label = label;
+                this.labelElement.textContent = label;
+                return this;
+            }
+
+            setUnit(unit) {
+                this.unit = unit;
+                // 更新顯示
+                const currentValue = parseFloat(this.valueElement.textContent);
+                this.setValue(currentValue);
+                return this;
+            }
+        }
+
+        // 初始化儀表板
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 創建溫度計元件
+            const temperatureGauge = new TemperatureGauge({
+                minValue: -20,
+                maxValue: 100,
+                unit: '°C',
+                label: '溫度'
+            });
+
+            // 獲取元素
+            const connectBtn = document.getElementById('connectBtn');
+            const testBtn = document.getElementById('testBtn');
+            const deviceInfo = document.getElementById('deviceInfo');
+            const deviceIdInput = document.getElementById('deviceIdInput');
+            
+            let iot = null;
+            // 默認ID值 - 固定為 dashboard-001
+            let deviceId = 'dashboard-001';
+            // 將默認值填入輸入欄位
+            deviceIdInput.value = deviceId;
+
+            // 連接按鈕事件
+            connectBtn.addEventListener('click', async () => {
+                if (iot) {
+                    // 如已連接，則斷開
                     await iot.disconnect();
                     iot = null;
-                    isConnected = false;
-                    registeredHandlers.clear(); // 清除已註冊處理器記錄
-                    updateStatus('未連線', 'disconnected');
-                    addLog('已斷線', 'info');
-                } catch (error) {
-                    addLog(`斷線失敗: ${error.message}`, 'error');
-                }
-            } else {
-                // 連線
-                const deviceId = document.getElementById('deviceId').value.trim();
-                if (!deviceId) {
-                    addLog('請輸入裝置 ID', 'error');
+                    deviceInfo.textContent = '設備狀態: 已斷開連接';
+                    connectBtn.textContent = '連接設備';
+                    testBtn.disabled = true;
                     return;
                 }
-                
-                connectBtn.disabled = true;
-                updateStatus('連線中...', 'connecting');
-                addLog(`正在連線到裝置 ID: ${deviceId}`, 'info');
-                
+
                 try {
+                    // 建立連接，使用用戶輸入的deviceId作為邏輯ID
                     iot = new IoTDevice(deviceId);
                     await iot.connect();
-                    isConnected = true;
-                    registeredHandlers.clear(); // 重新連線時清除處理器記錄
-                    updateStatus('已連線', 'connected');
-                    addLog(`成功連線! 裝置 ID: ${deviceId}`, 'success');
-                    addLog(`訂閱主題: ${deviceId}/+ 和 ${deviceId}/reply/+`, 'info');
+                    
+                    // 註冊溫度感測器處理器
+                    iot.proc('temperature', async (msg) => {
+                        console.log('收到溫度數據:', msg.payload);
+                        temperatureGauge.setValue(msg.payload.value);
+                        return { status: 'ok' };
+                    });
+                    
+                    // 註冊滑桿數值處理器
+                    iot.proc('mySlider', async (msg) => {
+                        console.log('收到滑桿數據:', msg.payload);
+                        const receivedSliderValue = msg.payload.value;
+                        document.getElementById('receivedValue').textContent = receivedSliderValue;
+                        
+                        // 更新本頁滑桿的視覺位置和「當前值」顯示
+                        const localSlider = document.getElementById('mySlider');
+                        const localSliderValueDisplay = document.getElementById('sliderValue');
+                        localSlider.value = receivedSliderValue;
+                        localSliderValueDisplay.textContent = receivedSliderValue;
+                        
+                        return { status: 'ok' };
+                    });
+                    
+                    // 更新界面
+                    deviceInfo.textContent = `設備狀態: 已連接 (ID: ${deviceId})`;
+                    connectBtn.textContent = '斷開連接';
+                    testBtn.disabled = false;
+                    
                 } catch (error) {
-                    addLog(`連線失敗: ${error.message}`, 'error');
-                    updateStatus('未連線', 'disconnected');
+                    console.error('連接錯誤:', error);
+                    deviceInfo.textContent = `設備狀態: 連接失敗 (${error.message})`;
                 }
-            }
-            
-            updateButtons();
-        };
+            });
 
-        // 發送訊息
-        window.sendMessage = async function() {
-            if (!isConnected) {
-                addLog('請先連線', 'error');
-                return;
-            }
-
-            const targetDevice = document.getElementById('targetDevice').value.trim();
-            const action = document.getElementById('action').value.trim();
-            const payloadStr = document.getElementById('payload').value.trim();
-            const sendType = document.getElementById('sendType').value;
-
-            if (!targetDevice || !action) {
-                addLog('請填寫目標裝置和動作', 'error');
-                return;
-            }
-
-            let payload = {};
-            if (payloadStr) {
+            // 測試按鈕事件
+            testBtn.addEventListener('click', async () => {
+                if (!iot) return;
+                
                 try {
-                    payload = JSON.parse(payloadStr);
+                    // 模擬從另一個設備發送溫度數據
+                    const sensorId = 'sensor-123';
+                    const randomTemp = Math.round((Math.random() * 50 - 10) * 10) / 10; // -10 到 40 度
+                    
+                    // 直接發送到自己的處理器，模擬收到來自感測器的數據
+                    iot.pub(`${deviceId}.temperature`, { value: randomTemp });
+                    
+                    deviceInfo.textContent = `設備狀態: 已連接 (ID: ${deviceId}) - 正在獲取溫度數據...`;
+                    
                 } catch (error) {
-                    addLog(`JSON 格式錯誤: ${error.message}`, 'error');
-                    return;
+                    console.error('測試錯誤:', error);
+                    deviceInfo.textContent = `設備狀態: 測試失敗 (${error.message})`;
                 }
-            }
-
-            const topic = `${targetDevice}.${action}`;
-            
-            try {
-                if (sendType === 'sync') {
-                    addLog(`發送同步訊息到 ${topic}`, 'info');
-                    addLog(`訊息內容: ${JSON.stringify(payload)}`, 'info');
-                    
-                    const response = await iot.pubSync(topic, payload, 5000);
-                    addLog(`收到同步回覆: ${JSON.stringify(response)}`, 'success');
-                } else {
-                    addLog(`發送非同步訊息到 ${topic}`, 'info');
-                    addLog(`訊息內容: ${JSON.stringify(payload)}`, 'info');
-                    
-                    iot.pub(topic, payload);
-                    addLog('非同步訊息已發送', 'success');
-                }
-            } catch (error) {
-                addLog(`發送失敗: ${error.message}`, 'error');
-            }
-        };
-
-        // 註冊處理器 - 修復重複註冊問題
-        window.registerHandler = function() {
-            if (!isConnected) {
-                addLog('請先連線', 'error');
-                return;
-            }
-
-            const action = document.getElementById('handlerAction').value.trim();
-            if (!action) {
-                addLog('請輸入要處理的動作名稱', 'error');
-                return;
-            }
-
-            // 檢查是否已經註冊過
-            if (registeredHandlers.has(action)) {
-                addLog(`警告: "${action}" 動作已經註冊過，將覆蓋原有的處理器`, 'error');
-            }
-
-            iot.proc(action, async (msg) => {
-                addLog(`收到 ${action} 訊息: ${JSON.stringify(msg.payload)}`, 'received');
-                addLog(`來源: ${msg.from}, 請求 ID: ${msg.requestId}`, 'received');
-                
-                // 回覆訊息
-                const reply = {
-                    message: `已處理 ${action} 動作`,
-                    timestamp: new Date().toISOString(),
-                    originalPayload: msg.payload
-                };
-                
-                addLog(`回覆訊息: ${JSON.stringify(reply)}`, 'info');
-                return reply;
             });
 
-            registeredHandlers.add(action);
-            addLog(`已註冊 "${action}" 動作的處理器`, 'success');
+            // 滑桿事件處理
+            const slider = document.getElementById('mySlider');
+            const sliderValue = document.getElementById('sliderValue');
             
-            // 顯示目前所有已註冊的處理器
-            addLog(`目前已註冊處理器: [${Array.from(registeredHandlers).join(', ')}]`, 'info');
-        };
-
-        // 快速測試 - 修復與其他處理器的衝突
-        window.quickTest = async function() {
-            if (!isConnected) {
-                addLog('請先連線', 'error');
-                return;
-            }
-
-            const deviceId = document.getElementById('deviceId').value;
-            const quickTestAction = 'quicktest';
-            
-            // 檢查是否與其他處理器衝突
-            if (registeredHandlers.has(quickTestAction)) {
-                addLog(`警告: "${quickTestAction}" 處理器已存在，將臨時覆蓋`, 'error');
-            }
-            
-            // 註冊快速測試處理器
-            iot.proc(quickTestAction, async (msg) => {
-                addLog(`[快速測試] 收到訊息: ${JSON.stringify(msg.payload)}`, 'received');
-                return {
-                    status: 'success',
-                    message: '快速測試回覆',
-                    receivedAt: new Date().toISOString(),
-                    echo: msg.payload
-                };
-            });
-
-            // 臨時記錄快速測試處理器
-            const wasRegistered = registeredHandlers.has(quickTestAction);
-            registeredHandlers.add(quickTestAction);
-
-            addLog('開始快速測試...', 'info');
-            
-            try {
-                // 發送測試訊息給自己
-                const testPayload = {
-                    test: true,
-                    message: 'Hello from quick test!',
-                    timestamp: new Date().toISOString()
-                };
+            slider.addEventListener('input', function() {
+                // 更新顯示的當前值
+                sliderValue.textContent = this.value;
                 
-                addLog(`發送測試訊息: ${JSON.stringify(testPayload)}`, 'info');
-                const response = await iot.pubSync(`${deviceId}.${quickTestAction}`, testPayload, 5000);
-                addLog(`快速測試成功! 回覆: ${JSON.stringify(response)}`, 'success');
-                
-                // 如果原本沒有註冊，測試完成後提醒用戶
-                if (!wasRegistered) {
-                    addLog(`提醒: 快速測試已自動註冊 "${quickTestAction}" 處理器`, 'info');
+                // 即時發送滑桿數值
+                if (iot && iot.client && iot.client.connected) {
+                    try {
+                        iot.pub(`${deviceId}.mySlider`, { value: parseInt(this.value) });
+                    } catch (error) {
+                        console.error('滑桿數據即時發送錯誤:', error);
+                        // 可以選擇性地更新deviceInfo來提示錯誤，但避免過於頻繁更新
+                        // deviceInfo.textContent = `設備狀態: 滑桿數據發送失敗 (${error.message})`; 
+                    }
                 }
-                
-            } catch (error) {
-                addLog(`快速測試失敗: ${error.message}`, 'error');
-            }
-        };
-
-        // 初始化
-        addLog('IoT Device 測試工具已載入', 'info');
-        addLog('請輸入裝置 ID 並點擊連線開始測試', 'info');
-        
-        // 預設填入一些測試資料
-        document.getElementById('payload').value = JSON.stringify({
-            message: "Hello IoT!",
-            timestamp: new Date().toISOString()
-        }, null, 2);
+            });
+        });
     </script>
 </body>
 
