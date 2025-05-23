@@ -16,15 +16,11 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 流程編輯器路由
-app.get('/flow-editor', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'flow-editor.html'));
-});
+
 
 app.listen(port, (err) => {
   if (err) {
     return console.error('啟動伺服器失敗:', err);
   }
   console.log(`伺服器正在 http://localhost:${port} 上運行`);
-  console.log(`流程編輯器可在 http://localhost:${port}/flow-editor 訪問`);
 }); 
