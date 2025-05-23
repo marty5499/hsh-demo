@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT 節點編排介面</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script type="module" src="./iotDevice.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .layout {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* 左側工具面板 */
+        #palette {
+            width: 200px;
+            background: white;
+            padding: 20px;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        #palette h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        .palette-button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .palette-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .demo-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .demo-button {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            margin-bottom: 10px;
+        }
+
+        .demo-button:hover {
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+
+        /* 中間畫布區域 */
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            background: #f8f9fa;
+            overflow: hidden;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #connection-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* 節點樣式 */
+        .node {
+            position: absolute;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            padding: 15px;
+            min-width: 150px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            cursor: move;
+            user-select: none;
+            z-index: 2;
+        }
+
+        .node.selected {
+            border-color: #667eea;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .node.device {
+            border-color: #4CAF50;
+        }
+
+        .node.publish {
+            border-color: #ff9800;
+        }
+
+        .node.subscribe {
+            border-color: #2196F3;
+        }
+
+        .node.function {
+            border-color: #9C27B0;
+        }
+
+        .node .node-header {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .node.device .node-header {
+            color: #4CAF50;
+        }
+
+        .node.publish .node-header {
+            color: #ff9800;
+        }
+
+        .node.subscribe .node-header {
+            color: #2196F3;
+        }
+
+        .node.function .node-header {
+            color: #9C27B0;
+        }
+
+        .node .node-content {
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* 連接埠 */
+        .port {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            cursor: crosshair;
+            z-index: 3;
+        }
+
+        .port.input {
+            background: #4CAF50;
+            left: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .port.output {
+            background: #ff9800;
+            right: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .port:hover {
+            transform: scale(1.5) translateY(-50%);
+        }
+
+        .port.output:hover {
+            transform: scale(1.5) translateY(-50%);
+        }
+
+        /* 連線 */
+        .connection {
+            stroke: #666;
+            stroke-width: 2;
+            fill: none;
+            pointer-events: stroke;
+            cursor: pointer;
+        }
+
+        .connection.selected {
+            stroke: #667eea;
+            stroke-width: 3;
+        }
+
+        .connection.temp {
+            stroke: #ff9800;
+            stroke-width: 2;
+            stroke-dasharray: 5,5;
+        }
+
+        /* 右側屬性面板 */
+        #inspector {
+            width: 300px;
+            background: white;
+            padding: 20px;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        #inspector h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn.danger {
+            background: linear-gradient(135deg, #f44336 0%, #e91e63 100%);
+        }
+
+        /* 工具列 */
+        .toolbar {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 10px;
+            z-index: 5;
+        }
+
+        .toolbar button {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+
+        .toolbar button:hover {
+            transform: scale(1.05);
+        }
+
+        .toolbar button.success {
+            background: #4CAF50;
+        }
+
+        .toolbar button.danger {
+            background: #f44336;
+        }
+
+        /* 日誌面板 */
+        #log-panel {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 200px;
+            background: #333;
+            color: white;
+            padding: 15px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 4;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+        }
+
+        #log-panel.visible {
+            transform: translateY(0);
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 3px 0;
+        }
+
+        .log-entry.info {
+            color: #4CAF50;
+        }
+
+        .log-entry.warn {
+            color: #ff9800;
+        }
+
+        .log-entry.error {
+            color: #f44336;
+        }
+
+        /* 提示訊息 */
+        .help-text {
+            font-size: 12px;
+            color: #999;
+            margin-top: 20px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="layout">
+        <!-- 左側工具面板 -->
+        <div id="palette">
+            <h3>節點工具</h3>
+            <button class="palette-button" data-type="device">
+                📱 IoT 裝置
+            </button>
+            <button class="palette-button" data-type="publish">
+                📡 發布節點
+            </button>
+            <button class="palette-button" data-type="subscribe">
+                📥 訂閱節點
+            </button>
+            <button class="palette-button" data-type="function">
+                ⚙️ 函式節點
+            </button>
+
+            <div class="demo-section">
+                <h3>演示範例</h3>
+                <button class="palette-button demo-button" id="demo-basic">
+                    🚀 基本範例
+                </button>
+                <button class="palette-button demo-button" id="demo-sensor">
+                    🌡️ 感測器監控
+                </button>
+            </div>
+
+            <div class="help-text">
+                <strong>使用說明：</strong><br>
+                1. 點擊上方按鈕添加節點<br>
+                2. 拖拉橘色輸出埠連接到綠色輸入埠<br>
+                3. 點擊節點設定屬性<br>
+                4. 按執行按鈕啟動流程
+            </div>
+        </div>
+
+        <!-- 中間畫布區域 -->
+        <div id="canvas-container">
+            <!-- 工具列 -->
+            <div class="toolbar">
+                <button id="run-btn" class="success">▶️ 執行</button>
+                <button id="stop-btn" class="danger">⏹️ 停止</button>
+                <button id="clear-btn">🗑️ 清空</button>
+                <button id="save-btn">💾 儲存</button>
+                <button id="load-btn">📁 載入</button>
+                <button id="log-btn">📋 日誌</button>
+            </div>
+
+            <!-- SVG 連線層 -->
+            <svg id="connection-layer">
+                <defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" 
+                            refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
+                    </marker>
+                </defs>
+            </svg>
+
+            <!-- 節點畫布 -->
+            <div id="canvas"></div>
+        </div>
+
+        <!-- 右側屬性面板 -->
+        <div id="inspector">
+            <h3>屬性編輯</h3>
+            <div id="inspector-content">
+                <p style="color: #999; text-align: center; margin-top: 50px;">
+                    選擇一個節點或連線來編輯屬性
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日誌面板 -->
+    <div id="log-panel">
+        <div id="log-content"></div>
+    </div>
+
+    <script src="flow-editor.js"></script>
+</body>
+
+</html> 
