@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>超級瑪莉歐 - 復刻版</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(180deg, #5C94FC 0%, #5C94FC 60%, #00D4AA 60%, #00D4AA 100%);
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #gameCanvas {
+            display: block;
+            background: transparent;
+            image-rendering: pixelated;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 2px 2px 0px black;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            font-size: 14px;
+            text-shadow: 1px 1px 0px black;
+        }
+        
+        .cloud {
+            position: absolute;
+            background: white;
+            border-radius: 50px;
+            opacity: 0.8;
+        }
+        
+        .cloud::before,
+        .cloud::after {
+            content: '';
+            position: absolute;
+            background: white;
+            border-radius: 50px;
+        }
+        
+        .cloud1 {
+            width: 100px;
+            height: 40px;
+            top: 15%;
+            left: 20%;
+            animation: float 20s infinite linear;
+        }
+        
+        .cloud1::before {
+            width: 50px;
+            height: 50px;
+            top: -25px;
+            left: 10px;
+        }
+        
+        .cloud1::after {
+            width: 60px;
+            height: 20px;
+            top: -10px;
+            right: 10px;
+        }
+        
+        .cloud2 {
+            width: 80px;
+            height: 30px;
+            top: 25%;
+            right: 30%;
+            animation: float 25s infinite linear reverse;
+        }
+        
+        .cloud2::before {
+            width: 40px;
+            height: 40px;
+            top: -20px;
+            left: 15px;
+        }
+        
+        .cloud2::after {
+            width: 50px;
+            height: 15px;
+            top: -5px;
+            right: 15px;
+        }
+        
+        @keyframes float {
+            from { transform: translateX(-100px); }
+            to { transform: translateX(calc(100vw + 100px)); }
+        }
+    </style>
+</head>
+<body>
+    <div class="cloud cloud1"></div>
+    <div class="cloud cloud2"></div>
+    
+    <div id="ui">
+        <div>分數: <span id="score">0</span></div>
+        <div>生命: <span id="lives">3</span></div>
+        <div>硬幣: <span id="coins">0</span></div>
+    </div>
+    
+    <div id="controls">
+        <div>方向鍵: 移動</div>
+        <div>空白鍵: 跳躍</div>
+        <div>R鍵: 重新開始</div>
+    </div>
+    
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        class SuperMarioGame {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                
+                // 遊戲狀態
+                this.gameState = 'playing'; // playing, paused, gameOver
+                this.score = 0;
+                this.lives = 3;
+                this.coins = 0;
+                this.camera = { x: 0, y: 0 };
+                
+                // 物理常數
+                this.gravity = 0.8;
+                this.friction = 0.85;
+                this.jumpPower = -15;
+                this.speed = 5;
+                
+                // 初始化遊戲物件
+                this.initializeGame();
+                this.setupEventListeners();
+                this.gameLoop();
+            }
+            
+            initializeGame() {
+                // 瑪莉歐角色
+                this.mario = {
+                    x: 100,
+                    y: this.canvas.height - 150,
+                    width: 32,
+                    height: 32,
+                    vx: 0,
+                    vy: 0,
+                    onGround: false,
+                    direction: 1, // 1 for right, -1 for left
+                    invulnerable: false,
+                    invulnerabilityTime: 0
+                };
+                
+                // 建立關卡
+                this.createLevel();
+                
+                // 敵人
+                this.enemies = this.createEnemies();
+                
+                // 更新UI
+                this.updateUI();
+            }
+            
+            createLevel() {
+                this.blocks = [];
+                this.pipes = [];
+                this.questionBlocks = [];
+                this.coins = [];
+                
+                const groundLevel = this.canvas.height - 96;
+                const blockSize = 32;
+                
+                // 地面磚塊
+                for (let x = 0; x < this.canvas.width + 1000; x += blockSize) {
+                    for (let y = groundLevel; y < this.canvas.height; y += blockSize) {
+                        this.blocks.push({
+                            x: x,
+                            y: y,
+                            width: blockSize,
+                            height: blockSize,
+                            type: 'ground'
+                        });
+                    }
+                }
+                
+                // 飛行磚塊平台
+                const platforms = [
+                    { x: 300, y: groundLevel - 100, width: 4 },
+                    { x: 500, y: groundLevel - 150, width: 3 },
+                    { x: 800, y: groundLevel - 100, width: 5 },
+                    { x: 1100, y: groundLevel - 200, width: 3 },
+                    { x: 1400, y: groundLevel - 120, width: 4 }
+                ];
+                
+                platforms.forEach(platform => {
+                    for (let i = 0; i < platform.width; i++) {
+                        this.blocks.push({
+                            x: platform.x + i * blockSize,
+                            y: platform.y,
+                            width: blockSize,
+                            height: blockSize,
+                            type: 'brick'
+                        });
+                    }
+                });
+                
+                // 問號磚塊
+                this.questionBlocks = [
+                    { x: 350, y: groundLevel - 100, width: blockSize, height: blockSize, hit: false },
+                    { x: 550, y: groundLevel - 150, width: blockSize, height: blockSize, hit: false },
+                    { x: 850, y: groundLevel - 100, width: blockSize, height: blockSize, hit: false },
+                    { x: 1150, y: groundLevel - 200, width: blockSize, height: blockSize, hit: false }
+                ];
+                
+                // 水管
+                this.pipes = [
+                    { x: 700, y: groundLevel - 64, width: 64, height: 64 },
+                    { x: 1300, y: groundLevel - 96, width: 64, height: 96 },
+                    { x: 1800, y: groundLevel - 128, width: 64, height: 128 }
+                ];
+            }
+            
+            createEnemies() {
+                const groundLevel = this.canvas.height - 128;
+                return [
+                    { x: 400, y: groundLevel, width: 32, height: 32, vx: -1, type: 'goomba', alive: true },
+                    { x: 600, y: groundLevel, width: 32, height: 32, vx: -1, type: 'goomba', alive: true },
+                    { x: 900, y: groundLevel, width: 32, height: 32, vx: -1, type: 'goomba', alive: true },
+                    { x: 1200, y: groundLevel, width: 32, height: 32, vx: -1, type: 'goomba', alive: true },
+                    { x: 1500, y: groundLevel, width: 32, height: 32, vx: -1, type: 'goomba', alive: true }
+                ];
+            }
+            
+            setupEventListeners() {
+                this.keys = {};
+                
+                window.addEventListener('keydown', (e) => {
+                    this.keys[e.code] = true;
+                    
+                    if (e.code === 'KeyR') {
+                        this.restartGame();
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    this.keys[e.code] = false;
+                });
+                
+                window.addEventListener('resize', () => {
+                    this.canvas.width = window.innerWidth;
+                    this.canvas.height = window.innerHeight;
+                });
+            }
+            
+            update() {
+                if (this.gameState !== 'playing') return;
+                
+                this.updateMario();
+                this.updateEnemies();
+                this.updateCamera();
+                this.checkCollisions();
+                
+                // 減少無敵時間
+                if (this.mario.invulnerable) {
+                    this.mario.invulnerabilityTime--;
+                    if (this.mario.invulnerabilityTime <= 0) {
+                        this.mario.invulnerable = false;
+                    }
+                }
+            }
+            
+            updateMario() {
+                // 移動輸入
+                if (this.keys['ArrowLeft']) {
+                    this.mario.vx = -this.speed;
+                    this.mario.direction = -1;
+                } else if (this.keys['ArrowRight']) {
+                    this.mario.vx = this.speed;
+                    this.mario.direction = 1;
+                } else {
+                    this.mario.vx *= this.friction;
+                }
+                
+                // 跳躍輸入
+                if (this.keys['Space'] && this.mario.onGround) {
+                    this.mario.vy = this.jumpPower;
+                    this.mario.onGround = false;
+                }
+                
+                // 重力
+                this.mario.vy += this.gravity;
+                
+                // 更新位置
+                this.mario.x += this.mario.vx;
+                this.mario.y += this.mario.vy;
+                
+                // 檢查是否掉出螢幕
+                if (this.mario.y > this.canvas.height) {
+                    this.takeDamage();
+                }
+                
+                // 限制左邊界
+                if (this.mario.x < 0) {
+                    this.mario.x = 0;
+                    this.mario.vx = 0;
+                }
+            }
+            
+            updateEnemies() {
+                this.enemies.forEach(enemy => {
+                    if (!enemy.alive) return;
+                    
+                    enemy.x += enemy.vx;
+                    
+                    // 碰到牆壁或邊緣就轉向
+                    let hitWall = false;
+                    this.blocks.forEach(block => {
+                        if (this.checkCollision(enemy, block)) {
+                            if (enemy.vx > 0) {
+                                enemy.x = block.x - enemy.width;
+                            } else {
+                                enemy.x = block.x + block.width;
+                            }
+                            hitWall = true;
+                        }
+                    });
+                    
+                    if (hitWall) {
+                        enemy.vx *= -1;
+                    }
+                    
+                    // 檢查是否會掉落（簡單的邊緣檢測）
+                    const nextX = enemy.x + enemy.vx * 10;
+                    let hasGround = false;
+                    this.blocks.forEach(block => {
+                        if (Math.abs(block.y - (enemy.y + enemy.height)) < 5 &&
+                            nextX + enemy.width > block.x && 
+                            nextX < block.x + block.width) {
+                            hasGround = true;
+                        }
+                    });
+                    
+                    if (!hasGround) {
+                        enemy.vx *= -1;
+                    }
+                });
+            }
+            
+            updateCamera() {
+                // 相機跟隨瑪莉歐
+                const targetX = this.mario.x - this.canvas.width / 3;
+                this.camera.x = Math.max(0, targetX);
+            }
+            
+            checkCollisions() {
+                this.mario.onGround = false;
+                
+                // 與磚塊的碰撞
+                [...this.blocks, ...this.pipes].forEach(block => {
+                    if (this.checkCollision(this.mario, block)) {
+                        this.resolveCollision(this.mario, block);
+                    }
+                });
+                
+                // 與問號磚塊的碰撞
+                this.questionBlocks.forEach(block => {
+                    if (this.checkCollision(this.mario, block)) {
+                        this.resolveCollision(this.mario, block);
+                        
+                        // 從下面撞擊問號磚塊
+                        if (!block.hit && this.mario.vy < 0 && 
+                            this.mario.y > block.y) {
+                            block.hit = true;
+                            this.collectCoin();
+                            this.score += 200;
+                            this.updateUI();
+                        }
+                    }
+                });
+                
+                // 與敵人的碰撞
+                this.enemies.forEach(enemy => {
+                    if (!enemy.alive || this.mario.invulnerable) return;
+                    
+                    if (this.checkCollision(this.mario, enemy)) {
+                        // 如果瑪莉歐從上面跳在敵人上
+                        if (this.mario.vy > 0 && this.mario.y < enemy.y - 10) {
+                            enemy.alive = false;
+                            this.mario.vy = -8; // 小跳
+                            this.score += 100;
+                            this.updateUI();
+                        } else {
+                            // 瑪莉歐受傷
+                            this.takeDamage();
+                        }
+                    }
+                });
+            }
+            
+            checkCollision(rect1, rect2) {
+                return rect1.x < rect2.x + rect2.width &&
+                       rect1.x + rect1.width > rect2.x &&
+                       rect1.y < rect2.y + rect2.height &&
+                       rect1.y + rect1.height > rect2.y;
+            }
+            
+            resolveCollision(mario, block) {
+                const overlapLeft = (mario.x + mario.width) - block.x;
+                const overlapRight = (block.x + block.width) - mario.x;
+                const overlapTop = (mario.y + mario.height) - block.y;
+                const overlapBottom = (block.y + block.height) - mario.y;
+                
+                const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+                
+                if (minOverlap === overlapTop && mario.vy > 0) {
+                    // 從上面碰撞（著地）
+                    mario.y = block.y - mario.height;
+                    mario.vy = 0;
+                    mario.onGround = true;
+                } else if (minOverlap === overlapBottom && mario.vy < 0) {
+                    // 從下面碰撞（撞到天花板）
+                    mario.y = block.y + block.height;
+                    mario.vy = 0;
+                } else if (minOverlap === overlapLeft && mario.vx > 0) {
+                    // 從左邊碰撞
+                    mario.x = block.x - mario.width;
+                    mario.vx = 0;
+                } else if (minOverlap === overlapRight && mario.vx < 0) {
+                    // 從右邊碰撞
+                    mario.x = block.x + block.width;
+                    mario.vx = 0;
+                }
+            }
+            
+            takeDamage() {
+                if (this.mario.invulnerable) return;
+                
+                this.lives--;
+                this.mario.invulnerable = true;
+                this.mario.invulnerabilityTime = 120; // 2秒無敵
+                
+                if (this.lives <= 0) {
+                    this.gameState = 'gameOver';
+                } else {
+                    // 重置瑪莉歐位置
+                    this.mario.x = 100;
+                    this.mario.y = this.canvas.height - 150;
+                    this.mario.vx = 0;
+                    this.mario.vy = 0;
+                    this.camera.x = 0;
+                }
+                
+                this.updateUI();
+            }
+            
+            collectCoin() {
+                this.coins++;
+                if (this.coins >= 100) {
+                    this.lives++;
+                    this.coins = 0;
+                }
+            }
+            
+            restartGame() {
+                this.gameState = 'playing';
+                this.score = 0;
+                this.lives = 3;
+                this.coins = 0;
+                this.camera = { x: 0, y: 0 };
+                this.initializeGame();
+            }
+            
+            updateUI() {
+                document.getElementById('score').textContent = this.score;
+                document.getElementById('lives').textContent = this.lives;
+                document.getElementById('coins').textContent = this.coins;
+            }
+            
+            render() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                this.ctx.save();
+                this.ctx.translate(-this.camera.x, -this.camera.y);
+                
+                // 渲染磚塊
+                this.renderBlocks();
+                
+                // 渲染水管
+                this.renderPipes();
+                
+                // 渲染問號磚塊
+                this.renderQuestionBlocks();
+                
+                // 渲染敵人
+                this.renderEnemies();
+                
+                // 渲染瑪莉歐
+                this.renderMario();
+                
+                this.ctx.restore();
+                
+                // 渲染遊戲結束畫面
+                if (this.gameState === 'gameOver') {
+                    this.renderGameOver();
+                }
+            }
+            
+            renderBlocks() {
+                this.blocks.forEach(block => {
+                    if (block.x + block.width < this.camera.x || 
+                        block.x > this.camera.x + this.canvas.width) return;
+                    
+                    if (block.type === 'ground') {
+                        this.ctx.fillStyle = '#8B4513';
+                        this.ctx.fillRect(block.x, block.y, block.width, block.height);
+                        this.ctx.strokeStyle = '#654321';
+                        this.ctx.lineWidth = 2;
+                        this.ctx.strokeRect(block.x, block.y, block.width, block.height);
+                    } else if (block.type === 'brick') {
+                        this.ctx.fillStyle = '#CD853F';
+                        this.ctx.fillRect(block.x, block.y, block.width, block.height);
+                        this.ctx.strokeStyle = '#8B4513';
+                        this.ctx.lineWidth = 1;
+                        this.ctx.strokeRect(block.x, block.y, block.width, block.height);
+                        
+                        // 磚塊紋理
+                        this.ctx.strokeStyle = '#654321';
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(block.x + block.width/2, block.y);
+                        this.ctx.lineTo(block.x + block.width/2, block.y + block.height);
+                        this.ctx.stroke();
+                    }
+                });
+            }
+            
+            renderPipes() {
+                this.pipes.forEach(pipe => {
+                    if (pipe.x + pipe.width < this.camera.x || 
+                        pipe.x > this.camera.x + this.canvas.width) return;
+                    
+                    // 水管主體
+                    this.ctx.fillStyle = '#228B22';
+                    this.ctx.fillRect(pipe.x, pipe.y, pipe.width, pipe.height);
+                    
+                    // 水管邊框
+                    this.ctx.strokeStyle = '#006400';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.strokeRect(pipe.x, pipe.y, pipe.width, pipe.height);
+                    
+                    // 水管頂部
+                    this.ctx.fillStyle = '#32CD32';
+                    this.ctx.fillRect(pipe.x - 8, pipe.y - 8, pipe.width + 16, 16);
+                    this.ctx.strokeRect(pipe.x - 8, pipe.y - 8, pipe.width + 16, 16);
+                });
+            }
+            
+            renderQuestionBlocks() {
+                this.questionBlocks.forEach(block => {
+                    if (block.x + block.width < this.camera.x || 
+                        block.x > this.camera.x + this.canvas.width) return;
+                    
+                    if (block.hit) {
+                        // 已撞擊的磚塊
+                        this.ctx.fillStyle = '#8B4513';
+                        this.ctx.fillRect(block.x, block.y, block.width, block.height);
+                        this.ctx.strokeStyle = '#654321';
+                        this.ctx.lineWidth = 2;
+                        this.ctx.strokeRect(block.x, block.y, block.width, block.height);
+                    } else {
+                        // 問號磚塊
+                        this.ctx.fillStyle = '#FFD700';
+                        this.ctx.fillRect(block.x, block.y, block.width, block.height);
+                        this.ctx.strokeStyle = '#FFA500';
+                        this.ctx.lineWidth = 2;
+                        this.ctx.strokeRect(block.x, block.y, block.width, block.height);
+                        
+                        // 問號
+                        this.ctx.fillStyle = '#8B4513';
+                        this.ctx.font = 'bold 20px Arial';
+                        this.ctx.textAlign = 'center';
+                        this.ctx.fillText('?', block.x + block.width/2, block.y + block.height/2 + 7);
+                    }
+                });
+            }
+            
+            renderEnemies() {
+                this.enemies.forEach(enemy => {
+                    if (!enemy.alive) return;
+                    if (enemy.x + enemy.width < this.camera.x || 
+                        enemy.x > this.camera.x + this.canvas.width) return;
+                    
+                    // 栗寶寶（Goomba）
+                    this.ctx.fillStyle = '#8B4513';
+                    this.ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                    
+                    // 眼睛
+                    this.ctx.fillStyle = 'white';
+                    this.ctx.fillRect(enemy.x + 8, enemy.y + 8, 6, 6);
+                    this.ctx.fillRect(enemy.x + 18, enemy.y + 8, 6, 6);
+                    
+                    this.ctx.fillStyle = 'black';
+                    this.ctx.fillRect(enemy.x + 10, enemy.y + 10, 2, 2);
+                    this.ctx.fillRect(enemy.x + 20, enemy.y + 10, 2, 2);
+                    
+                    // 嘴巴
+                    this.ctx.fillStyle = 'black';
+                    this.ctx.fillRect(enemy.x + 12, enemy.y + 20, 8, 2);
+                });
+            }
+            
+            renderMario() {
+                const mario = this.mario;
+                
+                // 無敵時閃爍效果
+                if (mario.invulnerable && Math.floor(mario.invulnerabilityTime / 10) % 2) {
+                    return;
+                }
+                
+                // 瑪莉歐身體
+                this.ctx.fillStyle = '#FF0000';
+                this.ctx.fillRect(mario.x + 4, mario.y + 8, 24, 16);
+                
+                // 瑪莉歐頭部
+                this.ctx.fillStyle = '#FFDBAC';
+                this.ctx.fillRect(mario.x + 8, mario.y, 16, 16);
+                
+                // 帽子
+                this.ctx.fillStyle = '#FF0000';
+                this.ctx.fillRect(mario.x + 6, mario.y, 20, 8);
+                
+                // 鬍子
+                this.ctx.fillStyle = '#8B4513';
+                this.ctx.fillRect(mario.x + 12, mario.y + 12, 8, 2);
+                
+                // 腿部
+                this.ctx.fillStyle = '#0000FF';
+                this.ctx.fillRect(mario.x + 8, mario.y + 24, 6, 8);
+                this.ctx.fillRect(mario.x + 18, mario.y + 24, 6, 8);
+                
+                // 鞋子
+                this.ctx.fillStyle = '#8B4513';
+                this.ctx.fillRect(mario.x + 6, mario.y + 30, 10, 2);
+                this.ctx.fillRect(mario.x + 16, mario.y + 30, 10, 2);
+            }
+            
+            renderGameOver() {
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                this.ctx.fillStyle = 'white';
+                this.ctx.font = 'bold 48px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('遊戲結束', this.canvas.width/2, this.canvas.height/2 - 50);
+                
+                this.ctx.font = 'bold 24px Arial';
+                this.ctx.fillText(`最終分數: ${this.score}`, this.canvas.width/2, this.canvas.height/2);
+                this.ctx.fillText('按 R 重新開始', this.canvas.width/2, this.canvas.height/2 + 50);
+            }
+            
+            gameLoop() {
+                this.update();
+                this.render();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+        
+        // 啟動遊戲
+        window.addEventListener('load', () => {
+            new SuperMarioGame();
+        });
+    </script>
+</body>
+</html>
