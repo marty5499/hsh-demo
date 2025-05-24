@@ -90,26 +90,20 @@
             color: #555;
         }
 
-        .temperature-slider {
+        .topic-input {
             width: 100%;
             max-width: 300px;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 14px;
+            text-align: center;
             margin: 10px 0;
         }
 
-        .simulate-btn {
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: transform 0.2s;
-            margin: 10px;
-        }
-
-        .simulate-btn:hover {
-            transform: translateY(-2px);
+        .topic-input:focus {
+            outline: none;
+            border-color: #667eea;
         }
 
         .legend {
@@ -132,6 +126,12 @@
             border-radius: 6px;
             margin-right: 8px;
         }
+
+        .status-info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -149,15 +149,10 @@
         
         <div class="controls">
             <div class="control-group">
-                <label for="temperatureSlider">調整溫度：</label>
-                <input type="range" id="temperatureSlider" class="temperature-slider" 
-                       min="0" max="80" value="25" step="1">
-                <div id="sliderValue">25°C</div>
-            </div>
-            
-            <div class="control-group">
-                <button class="simulate-btn" onclick="simulateTemperature()">模擬溫度變化</button>
-                <button class="simulate-btn" onclick="stopSimulation()">停止模擬</button>
+                <label for="topicInput">MQTT 主題：</label>
+                <input type="text" id="topicInput" class="topic-input" 
+                       value="gauge.temp" placeholder="輸入 MQTT 主題">
+                <div class="status-info" id="connectionStatus">準備連接...</div>
             </div>
         </div>
         
@@ -192,8 +187,7 @@
                 this.centerY = this.canvas.height - 50;
                 this.radius = 150;
                 this.temperature = 25;
-                this.simulationInterval = null;
-                this.isUpdatingFromMQTT = false; // 防止循環更新
+                this.currentTopic = 'gauge.temp';
                 
                 // 創建 IoT 設備實例
                 this.device = new window.IoTDevice('temperature-gauge');
@@ -208,31 +202,78 @@
                     // 連接到 MQTT broker
                     await this.device.connect();
                     console.log('MQTT 連接成功');
+                    this.updateStatus('已連接，等待溫度數據...');
                     
-                    // 設置處理器來接收溫度設置請求
-                    this.device.proc('setTemperature', (message) => {
-                        const newTemp = message.payload.temperature;
-                        if (typeof newTemp === 'number' && newTemp >= 0 && newTemp <= 80) {
-                            this.isUpdatingFromMQTT = true;
-                            this.setTemperature(newTemp);
-                            this.isUpdatingFromMQTT = false;
-                            return { success: true, temperature: newTemp };
-                        } else {
-                            return { error: 'Invalid temperature value' };
-                        }
-                    });
-
-                    // 設置處理器來接收溫度查詢請求
-                    this.device.proc('getTemperature', (message) => {
-                        return { temperature: this.temperature };
-                    });
-
-                    // 發布初始溫度
-                    this.broadcastTemperature();
+                    // 訂閱初始主題
+                    this.subscribeToTopic(this.currentTopic);
                     
                 } catch (error) {
                     console.error('MQTT 連接失敗:', error);
-                    // 如果 MQTT 連接失敗，仍然可以正常使用本地功能
+                    this.updateStatus('連接失敗');
+                }
+            }
+
+            subscribeToTopic(topic) {
+                if (!this.device || !this.device.client || !this.device.client.connected) {
+                    console.log('MQTT 未連接，無法訂閱主題');
+                    return;
+                }
+
+                // 取消訂閱舊主題
+                if (this.currentTopic && this.currentTopic !== topic) {
+                    this.device.client.unsubscribe(this.currentTopic);
+                }
+
+                // 訂閱新主題
+                this.currentTopic = topic;
+                this.device.client.subscribe(topic, (err) => {
+                    if (err) {
+                        console.error('訂閱主題失敗:', err);
+                        this.updateStatus('訂閱失敗');
+                    } else {
+                        console.log(`已訂閱主題: ${topic}`);
+                        this.updateStatus(`已訂閱主題: ${topic}`);
+                    }
+                });
+
+                // 監聽該主題的訊息
+                this.device.client.on('message', (receivedTopic, message) => {
+                    if (receivedTopic === topic) {
+                        try {
+                            const messageStr = message.toString();
+                            console.log(`收到訊息 [${receivedTopic}]:`, messageStr);
+                            
+                            // 嘗試解析為數字
+                            let temperature;
+                            
+                            // 如果是 JSON 格式，嘗試解析
+                            try {
+                                const data = JSON.parse(messageStr);
+                                temperature = data.temperature || data.temp || data.value || parseFloat(data);
+                            } catch {
+                                // 如果不是 JSON，直接解析為數字
+                                temperature = parseFloat(messageStr);
+                            }
+                            
+                            if (!isNaN(temperature) && temperature >= 0 && temperature <= 80) {
+                                this.setTemperature(temperature);
+                                this.updateStatus(`已接收: ${temperature}°C`);
+                            } else {
+                                console.warn('無效的溫度值:', messageStr);
+                                this.updateStatus('接收到無效數據');
+                            }
+                        } catch (error) {
+                            console.error('解析訊息失敗:', error);
+                            this.updateStatus('解析數據失敗');
+                        }
+                    }
+                });
+            }
+
+            updateStatus(message) {
+                const statusElement = document.getElementById('connectionStatus');
+                if (statusElement) {
+                    statusElement.textContent = message;
                 }
             }
 
@@ -242,30 +283,23 @@
             }
 
             setupEventListeners() {
-                const slider = document.getElementById('temperatureSlider');
-                const sliderValue = document.getElementById('sliderValue');
+                const topicInput = document.getElementById('topicInput');
                 
-                slider.addEventListener('input', (e) => {
-                    this.temperature = parseInt(e.target.value);
-                    sliderValue.textContent = this.temperature + '°C';
-                    this.updateDisplay();
-                    
-                    // 如果不是來自 MQTT 的更新，則廣播新溫度
-                    if (!this.isUpdatingFromMQTT) {
-                        this.broadcastTemperature();
+                topicInput.addEventListener('change', (e) => {
+                    const newTopic = e.target.value.trim();
+                    if (newTopic) {
+                        this.subscribeToTopic(newTopic);
                     }
                 });
-            }
 
-            broadcastTemperature() {
-                if (this.device && this.device.client && this.device.client.connected) {
-                    // 發布溫度變化給所有其他設備
-                    this.device.pub('temperature-gauge.setTemperature', {
-                        temperature: this.temperature,
-                        timestamp: Date.now(),
-                        from: this.deviceId
-                    });
-                }
+                topicInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        const newTopic = e.target.value.trim();
+                        if (newTopic) {
+                            this.subscribeToTopic(newTopic);
+                        }
+                    }
+                });
             }
 
             drawGauge() {
@@ -423,10 +457,8 @@
             updateTemperatureDisplay() {
                 const tempValue = document.getElementById('temperatureValue');
                 const tempStatus = document.getElementById('temperatureStatus');
-                const slider = document.getElementById('temperatureSlider');
                 
                 tempValue.textContent = this.temperature + '°C';
-                slider.value = this.temperature;
                 
                 let status, className;
                 if (this.temperature <= 20) {
@@ -449,34 +481,12 @@
 
             setTemperature(temp) {
                 this.temperature = Math.max(0, Math.min(80, temp));
-                document.getElementById('sliderValue').textContent = this.temperature + '°C';
                 this.updateDisplay();
             }
         }
 
         // 初始化儀表板
         const gauge = new TemperatureGauge('gaugeCanvas');
-
-        // 模擬溫度變化功能
-        window.simulateTemperature = function() {
-            if (gauge.simulationInterval) {
-                clearInterval(gauge.simulationInterval);
-            }
-            
-            gauge.simulationInterval = setInterval(() => {
-                const randomTemp = Math.floor(Math.random() * 81);
-                gauge.isUpdatingFromMQTT = false; // 確保模擬時會廣播
-                gauge.setTemperature(randomTemp);
-                gauge.broadcastTemperature();
-            }, 1500);
-        }
-
-        window.stopSimulation = function() {
-            if (gauge.simulationInterval) {
-                clearInterval(gauge.simulationInterval);
-                gauge.simulationInterval = null;
-            }
-        }
 
         // 頁面載入時顯示初始溫度
         window.addEventListener('load', () => {
